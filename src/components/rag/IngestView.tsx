@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 /**
  * IngestView - Data Sources Management
@@ -219,11 +219,10 @@ export default function IngestView() {
   // Ingestion state
   const [url, setUrl] = useState('')
   const [selectedFiles, setSelectedFiles] = useState<File[]>([])
-  // Benchmark Dataset (JSONL) ingest — client-side file + preview (UI scaffolding)
+  // Benchmark Dataset (JSONL) ingest â€” client-side file + preview (UI scaffolding)
   const [datasetFile, setDatasetFile] = useState<File | null>(null)
   const [datasetPreview, setDatasetPreview] = useState<string[]>([])
-  // Dummy: which embedding model the benchmark dataset would be embedded with (not wired yet)
-  const [datasetEmbedding, setDatasetEmbedding] = useState('nomic-embed-text')
+  const datasetInputRef = useRef<HTMLInputElement | null>(null)
   const [ingestType, setIngestType] = useState<string>('web')
   const [description, setDescription] = useState('')
   const [includeSubPages, setIncludeSubPages] = useState(false)
@@ -885,7 +884,7 @@ export default function IngestView() {
   const ingestOwnerTeamMissing = ingestOwnerTeamRequired && !ingestOwnerTeamSlug
 
   // Read a selected .jsonl benchmark dataset file and show a small preview of the
-  // first few rows. Client-side only for now — real ingest wiring is a follow-up.
+  // first few rows. Client-side only for now â€” real ingest wiring is a follow-up.
   const handleDatasetFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0] ?? null
     setDatasetFile(file)
@@ -898,6 +897,14 @@ export default function IngestView() {
     } catch (err) {
       console.error('Failed to read dataset file', err)
     }
+  }
+
+  // Clear the selected benchmark dataset file + preview. Also reset the hidden
+  // native input's value so re-selecting the same file fires onChange again.
+  const handleDatasetClear = () => {
+    setDatasetFile(null)
+    setDatasetPreview([])
+    if (datasetInputRef.current) datasetInputRef.current.value = ''
   }
 
   const handleIngest = async () => {
@@ -920,7 +927,7 @@ export default function IngestView() {
         try {
           rows = lines.map(line => JSON.parse(line))
         } catch (parseErr: any) {
-          toast(`Malformed JSONL — each line must be a JSON object: ${parseErr?.message || parseErr}`, 'error')
+          toast(`Malformed JSONL â€” each line must be a JSON object: ${parseErr?.message || parseErr}`, 'error')
           return
         }
         // Derive a stable datasource id/name from the file stem.
@@ -929,7 +936,7 @@ export default function IngestView() {
         const datasourceId = `benchmark_${safeStem}`.slice(0, 96)
         const datasourceName = `Benchmark: ${stem}`
 
-        toast(`Ingesting ${rows.length} documents…`, 'info')
+        toast(`Ingesting ${rows.length} documentsâ€¦`, 'info')
         const result = await ingestBenchmarkCorpus(rows, datasourceId, datasourceName, {
           description: description || undefined,
           owner_team_slug: ingestOwnerTeamSlug || undefined,
@@ -937,8 +944,7 @@ export default function IngestView() {
         await fetchDataSources()
         await fetchJobsForDataSource(result.datasource_id)
         toast(`Ingested ${result.count} documents into "${datasourceName}"`, 'success')
-        setDatasetFile(null)
-        setDatasetPreview([])
+        handleDatasetClear()
         setDescription('')
       } catch (error: any) {
         console.error('Benchmark dataset ingest failed:', error)
@@ -992,7 +998,7 @@ export default function IngestView() {
       if (datasource_id) {
         await fetchJobsForDataSource(datasource_id)
         // Ownership tuples for the owning team are written server-side during
-        // ingest (spec 2026-06-03) — no client-side admin kb-assignment call.
+        // ingest (spec 2026-06-03) â€” no client-side admin kb-assignment call.
       }
       setUrl('')
       setSelectedFiles([])
@@ -1125,7 +1131,7 @@ export default function IngestView() {
       {/* Scrollable Content */}
       <ScrollArea className="flex-1">
         <div className="p-6 space-y-6">
-          {/* Ingest Section — hidden for users without INGEST permission */}
+          {/* Ingest Section â€” hidden for users without INGEST permission */}
           {canIngest && (
           <motion.section 
             className="bg-card rounded-xl shadow-sm border border-border p-5"
@@ -1205,16 +1211,23 @@ export default function IngestView() {
                     </>
                   ) : ingestType === 'dataset' ? (
                     <>
-                      <FileText className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                      <Input
+                      {/* Icon stays fixed on the left; the transparent native input
+                          overlays the styled display so clicking opens the picker
+                          while the selected file name shows in place. */}
+                      <FileText className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+                      <div className="flex h-10 w-full items-center rounded-md border border-input bg-background pl-10 pr-3 text-sm">
+                        <span className={`truncate ${datasetFile ? 'text-foreground' : 'text-muted-foreground'}`}>
+                          {datasetFile ? datasetFile.name : 'Choose a .jsonl file…'}
+                        </span>
+                      </div>
+                      <input
+                        ref={datasetInputRef}
                         type="file"
                         accept=".jsonl,.json,.csv,.txt,application/jsonl,application/json,text/csv,text/plain"
                         onChange={handleDatasetFileChange}
-                        className="pl-10"
+                        className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+                        aria-label="Benchmark dataset file"
                       />
-                      {datasetFile && (
-                        <p className="mt-1 text-xs text-muted-foreground">{datasetFile.name}</p>
-                      )}
                     </>
                   ) : (
                     <>
@@ -1255,30 +1268,17 @@ export default function IngestView() {
                 >
                   Ingest
                 </Button>
-              </div>
-
-              {/* Benchmark Dataset: embedding model selector (dummy — not wired) */}
-              {ingestType === 'dataset' && (
-                <div className="mt-3">
-                  <label className="block text-sm font-medium text-muted-foreground mb-1">
-                    Embedding model
-                  </label>
-                  <select
-                    value={datasetEmbedding}
-                    onChange={(e) => setDatasetEmbedding(e.target.value)}
-                    className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                {ingestType === 'dataset' && (
+                  <Button
+                    variant="outline"
+                    onClick={handleDatasetClear}
+                    disabled={!datasetFile}
+                    title="Clear selected file"
                   >
-                    <option value="nomic-embed-text">nomic-embed-text (768-dim)</option>
-                    <option value="mxbai-embed-large">mxbai-embed-large (1024-dim)</option>
-                    <option value="all-minilm">all-minilm (384-dim)</option>
-                    <option value="snowflake-arctic-embed">snowflake-arctic-embed</option>
-                    <option value="bge-m3">bge-m3</option>
-                  </select>
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    Which embedding model to embed this dataset with (dummy — not wired yet).
-                  </p>
-                </div>
-              )}
+                    Clear
+                  </Button>
+                )}
+              </div>
 
               {/* Benchmark Dataset: format hint + JSONL preview (UI scaffolding) */}
               {ingestType === 'dataset' && (
@@ -1330,7 +1330,7 @@ export default function IngestView() {
                       }))}
                       ariaLabel="Owning team"
                       ariaInvalid={ingestOwnerTeamMissing}
-                      placeholder={ingestOwnerTeamRequired ? 'Select a team…' : 'None (personal)'}
+                      placeholder={ingestOwnerTeamRequired ? 'Select a teamâ€¦' : 'None (personal)'}
                       searchPlaceholder="Search your teams..."
                       emptyLabel={
                         availableTeams.length === 0
@@ -1342,7 +1342,7 @@ export default function IngestView() {
                   </div>
                   {ingestOwnerTeamRequired && availableTeams.length === 0 && (
                     <span className="text-xs text-amber-600 dark:text-amber-400">
-                      No team grants you data-source authoring — ask an admin.
+                      No team grants you data-source authoring â€” ask an admin.
                     </span>
                   )}
                 </div>
@@ -2175,7 +2175,7 @@ export default function IngestView() {
                                         {/* Show latest job status when collapsed */}
                                         {!expandedJobsSections.has(ds.datasource_id) && jobs[0] && (
                                           <div className="flex items-center gap-2 min-w-0 flex-1">
-                                            <span className="text-muted-foreground shrink-0">•</span>
+                                            <span className="text-muted-foreground shrink-0">â€¢</span>
                                             <StatusBadge status={jobs[0].status} />
                                             <span className="text-xs text-muted-foreground truncate">
                                               {jobs[0].message}
@@ -2325,13 +2325,13 @@ export default function IngestView() {
                                                             {job.error_msgs && job.error_msgs.length > 0 && (
                                                               <details className="rounded-md bg-zinc-900 border border-zinc-700 overflow-hidden">
                                                                 <summary className="cursor-pointer text-xs font-mono px-3 py-1.5 hover:bg-zinc-800 flex items-center gap-2 text-zinc-400">
-                                                                  <span className="text-red-400">✗</span>
+                                                                  <span className="text-red-400">âœ—</span>
                                                                   <span className="text-red-400">{job.error_msgs.length}</span> error{job.error_msgs.length !== 1 ? 's' : ''}
                                                                 </summary>
                                                                 <div className="px-3 pb-2 pt-1 max-h-48 overflow-y-auto font-mono text-xs space-y-0.5 border-t border-zinc-800">
                                                                   {job.error_msgs.map((error: string, index: number) => (
                                                                     <div key={index} className="text-red-400/90 py-0.5 flex">
-                                                                      <span className="text-zinc-600 mr-2 select-none">›</span>
+                                                                      <span className="text-zinc-600 mr-2 select-none">â€º</span>
                                                                       <span className="break-all">{error}</span>
                                                                     </div>
                                                                   ))}
@@ -2970,7 +2970,7 @@ export default function IngestView() {
         </DialogContent>
       </Dialog>
 
-      {/* Ownership & sharing — the shared KbSharingPanel (owner team +
+      {/* Ownership & sharing â€” the shared KbSharingPanel (owner team +
           transfer + share-with-teams), opened from each source's people
           icon. Replaces the retired per-team read/ingest/admin popover. */}
       <Dialog open={Boolean(sharingDatasource)} onOpenChange={(open) => !open && setSharingDatasource(null)}>

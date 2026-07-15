@@ -204,6 +204,110 @@ export const ingestLocalFile = async (params: {
     return apiPostForm('/v1/ingest/local-file', form);
 };
 
+// A single line of a benchmark corpus .jsonl. Keys are matched flexibly so the
+// same UI works for corpora produced by different tools (deepeval/ragas scripts,
+// a parquet->jsonl conversion, etc.).
+export interface BenchmarkCorpusRow {
+    document_id?: string;
+    id?: string;
+    title?: string;
+    text?: string;
+    content?: string;
+    page_content?: string;
+    [key: string]: unknown;
+}
+
+/**
+ * Ingest a benchmark corpus JSONL (one document per line) into CAIPE, preserving
+ * each row's document_id. Runs the low-level ingestion lifecycle
+ * (heartbeat -> datasource -> job -> /v1/ingest batched -> complete) through the
+ * /api/rag proxy — mirroring the Python helper scripts, but the UI does not call
+ * those scripts. Preserving document_id is what keeps retrieval eval aligned with
+ * the golden set's expected_doc_ids.
+ */
+export const ingestBenchmarkCorpus = async (
+    rows: BenchmarkCorpusRow[],
+    datasourceId: string,
+    datasourceName: string,
+    options?: { description?: string; owner_team_slug?: string },
+): Promise<{ datasource_id: string; job_id: string; count: number }> => {
+    const description = options?.description || 'Benchmark corpus ingested via UI';
+
+    // 1. Register the ingestor (heartbeat).
+    const heartbeat = await apiPost<{ ingestor_id: string; max_documents_per_ingest: number }>(
+        '/v1/ingestor/heartbeat',
+        {
+            ingestor_type: 'benchmark-ui',
+            ingestor_name: 'benchmark-ui-ingestor',
+            description: 'Benchmark dataset UI ingestor',
+        },
+    );
+    const ingestorId = heartbeat.ingestor_id;
+    const batchSize = Math.min(100, heartbeat.max_documents_per_ingest || 100);
+
+    // 2. Create/replace the datasource.
+    await apiPost('/v1/datasource', {
+        datasource_id: datasourceId,
+        name: datasourceName,
+        ingestor_id: ingestorId,
+        description,
+        source_type: 'benchmark-ui',
+        last_updated: Math.floor(Date.now() / 1000),
+        ...(options?.owner_team_slug ? { owner_team_slug: options.owner_team_slug } : {}),
+    });
+
+    // 3. Open an ingestion job.
+    const job = await apiPost<{ job_id: string }>('/v1/job', undefined, {
+        datasource_id: datasourceId,
+        job_status: 'in_progress',
+        message: 'Benchmark corpus ingestion',
+        total: String(rows.length),
+    });
+    const jobId = job.job_id;
+
+    // 4. Build /v1/ingest document payloads, preserving document_id.
+    const documents = rows.map((row) => {
+        const documentId = String(row.document_id ?? row.id ?? '');
+        const title = typeof row.title === 'string' ? row.title : '';
+        const bodyRaw = row.text ?? row.content ?? row.page_content ?? '';
+        const body = typeof bodyRaw === 'string' ? bodyRaw : String(bodyRaw);
+        return {
+            page_content: title ? `${title}\n\n${body}` : body,
+            type: 'Document',
+            metadata: {
+                document_id: documentId,
+                datasource_id: datasourceId,
+                ingestor_id: ingestorId,
+                title,
+                description: '',
+                is_structured_entity: false,
+                document_type: 'text',
+                document_ingested_at: null,
+                fresh_until: null,
+                metadata: { source: 'benchmark-ui' },
+            },
+        };
+    });
+
+    // 5. Push documents in batches.
+    for (let i = 0; i < documents.length; i += batchSize) {
+        const batch = documents.slice(i, i + batchSize);
+        await apiPost('/v1/ingest', {
+            documents: batch,
+            ingestor_id: ingestorId,
+            datasource_id: datasourceId,
+            job_id: jobId,
+        });
+    }
+
+    // 6. Mark the job complete (status via query params, matching the script).
+    await apiPatch(
+        `/v1/job/${encodeURIComponent(jobId)}?job_status=completed&message=${encodeURIComponent('Benchmark corpus ingestion complete')}`,
+    );
+
+    return { datasource_id: datasourceId, job_id: jobId, count: documents.length };
+};
+
 export const reloadDataSource = async (datasourceId: string): Promise<{ datasource_id: string; message: string }> => {
     // Determine endpoint based on datasource ID pattern
     if (datasourceId.includes('src_confluence___')) {

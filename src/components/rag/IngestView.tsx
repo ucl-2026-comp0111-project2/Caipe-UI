@@ -73,6 +73,7 @@ getIngestors,
 getJobsBatch,
 getJobsByDataSource,
 getJobStatus,
+ingestBenchmarkCorpus,
 ingestLocalFile,
 ingestUrl,
 JIRA_INGESTOR_ID,
@@ -900,9 +901,49 @@ export default function IngestView() {
   }
 
   const handleIngest = async () => {
-    // Benchmark Dataset ingest is UI-only for now (preview + placeholder toast).
+    // Benchmark Dataset: parse the uploaded .jsonl (one JSON document per line)
+    // and ingest each line as its own document, preserving document_id so
+    // retrieval eval lines up with the golden set's expected_doc_ids.
     if (ingestType === 'dataset') {
-      toast('Benchmark dataset ingest wiring is coming next — preview only for now.', 'info')
+      if (!datasetFile) {
+        toast('Choose a .jsonl corpus file first', 'error')
+        return
+      }
+      try {
+        const text = await datasetFile.text()
+        const lines = text.split('\n').map(l => l.trim()).filter(Boolean)
+        if (lines.length === 0) {
+          toast('The dataset file is empty', 'error')
+          return
+        }
+        let rows
+        try {
+          rows = lines.map(line => JSON.parse(line))
+        } catch (parseErr: any) {
+          toast(`Malformed JSONL — each line must be a JSON object: ${parseErr?.message || parseErr}`, 'error')
+          return
+        }
+        // Derive a stable datasource id/name from the file stem.
+        const stem = datasetFile.name.replace(/\.[^.]+$/, '')
+        const safeStem = stem.replace(/[^a-zA-Z0-9_-]+/g, '_').replace(/^_+|_+$/g, '') || 'corpus'
+        const datasourceId = `benchmark_${safeStem}`.slice(0, 96)
+        const datasourceName = `Benchmark: ${stem}`
+
+        toast(`Ingesting ${rows.length} documents…`, 'info')
+        const result = await ingestBenchmarkCorpus(rows, datasourceId, datasourceName, {
+          description: description || undefined,
+          owner_team_slug: ingestOwnerTeamSlug || undefined,
+        })
+        await fetchDataSources()
+        await fetchJobsForDataSource(result.datasource_id)
+        toast(`Ingested ${result.count} documents into "${datasourceName}"`, 'success')
+        setDatasetFile(null)
+        setDatasetPreview([])
+        setDescription('')
+      } catch (error: any) {
+        console.error('Benchmark dataset ingest failed:', error)
+        toast(`Ingestion failed: ${error?.message || 'unknown error'}`, 'error')
+      }
       return
     }
     if (ingestType === 'file' && selectedFiles.length === 0) return

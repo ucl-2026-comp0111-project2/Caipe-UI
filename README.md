@@ -9,17 +9,7 @@ platform health.
 
 From the repository root:
 
-```bash
-make caipe-ui-dev
-```
-
-Or run directly:
-
-```bash
-cd ui
-npm install
-npm run dev
-```
+tbd
 
 Open http://localhost:3000.
 

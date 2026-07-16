@@ -860,7 +860,9 @@ export async function POST(
     const { path } = await params;
     const ragServerUrl = getRagServerUrl();
     const targetPath = path.join('/');
-    const targetUrl = `${ragServerUrl}/${targetPath}`;
+    // Forward query params to the upstream (e.g. POST /v1/job?datasource_id=...&job_status=...),
+    // mirroring GET/DELETE. Body-only POSTs send no query string, so this is a no-op for them.
+    const targetUrl = `${ragServerUrl}/${targetPath}${request.nextUrl.search}`;
     const contentType = request.headers.get('content-type') ?? '';
     const isMultipart = contentType.toLowerCase().includes('multipart/form-data');
 
@@ -1132,7 +1134,9 @@ export async function PATCH(
     const { path } = await params;
     const ragServerUrl = getRagServerUrl();
     const targetPath = path.join('/');
-    const targetUrl = `${ragServerUrl}/${targetPath}`;
+    // Forward query params to the upstream (e.g. PATCH /v1/job/{id}?job_status=completed),
+    // mirroring GET/DELETE. Body-only PATCHes send no query string, so this is a no-op for them.
+    const targetUrl = `${ragServerUrl}/${targetPath}${request.nextUrl.search}`;
 
     let body: unknown = undefined;
     const contentLength = request.headers.get('content-length');

@@ -219,8 +219,9 @@ export default function IngestView() {
   // Ingestion state
   const [url, setUrl] = useState('')
   const [selectedFiles, setSelectedFiles] = useState<File[]>([])
-  // Benchmark Dataset (JSONL) ingest â€” client-side file + preview (UI scaffolding)
-  const [datasetFile, setDatasetFile] = useState<File | null>(null)
+  // Benchmark Dataset (JSONL) ingest â€” client-side files + preview. Each selected
+  // .jsonl file is ingested into its own datasource.
+  const [datasetFiles, setDatasetFiles] = useState<File[]>([])
   const [datasetPreview, setDatasetPreview] = useState<string[]>([])
   const datasetInputRef = useRef<HTMLInputElement | null>(null)
   const [ingestType, setIngestType] = useState<string>('web')
@@ -886,12 +887,13 @@ export default function IngestView() {
   // Read a selected .jsonl benchmark dataset file and show a small preview of the
   // first few rows. Client-side only for now â€” real ingest wiring is a follow-up.
   const handleDatasetFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0] ?? null
-    setDatasetFile(file)
+    const files = Array.from(e.target.files ?? [])
+    setDatasetFiles(files)
     setDatasetPreview([])
-    if (!file) return
+    if (files.length === 0) return
     try {
-      const text = await file.text()
+      // Preview the first file's first few lines.
+      const text = await files[0].text()
       const lines = text.split('\n').filter(line => line.trim()).slice(0, 5)
       setDatasetPreview(lines)
     } catch (err) {
@@ -899,10 +901,10 @@ export default function IngestView() {
     }
   }
 
-  // Clear the selected benchmark dataset file + preview. Also reset the hidden
+  // Clear the selected benchmark dataset files + preview. Also reset the hidden
   // native input's value so re-selecting the same file fires onChange again.
   const handleDatasetClear = () => {
-    setDatasetFile(null)
+    setDatasetFiles([])
     setDatasetPreview([])
     if (datasetInputRef.current) datasetInputRef.current.value = ''
   }
@@ -912,40 +914,47 @@ export default function IngestView() {
     // and ingest each line as its own document, preserving document_id so
     // retrieval eval lines up with the golden set's expected_doc_ids.
     if (ingestType === 'dataset') {
-      if (!datasetFile) {
-        toast('Choose a .jsonl corpus file first', 'error')
+      if (datasetFiles.length === 0) {
+        toast('Choose one or more .jsonl corpus files first', 'error')
         return
       }
       try {
-        const text = await datasetFile.text()
-        const lines = text.split('\n').map(l => l.trim()).filter(Boolean)
-        if (lines.length === 0) {
-          toast('The dataset file is empty', 'error')
-          return
-        }
-        let rows
-        try {
-          rows = lines.map(line => JSON.parse(line))
-        } catch (parseErr: any) {
-          toast(`Malformed JSONL â€” each line must be a JSON object: ${parseErr?.message || parseErr}`, 'error')
-          return
-        }
-        // Derive a stable datasource id/name from the file stem.
-        const stem = datasetFile.name.replace(/\.[^.]+$/, '')
-        const safeStem = stem.replace(/[^a-zA-Z0-9_-]+/g, '_').replace(/^_+|_+$/g, '') || 'corpus'
-        const datasourceId = `benchmark_${safeStem}`.slice(0, 96)
-        const datasourceName = `Benchmark: ${stem}`
+        let totalDocs = 0
+        const ingestedSources: string[] = []
+        for (const file of datasetFiles) {
+          const text = await file.text()
+          const lines = text.split('\n').map(l => l.trim()).filter(Boolean)
+          if (lines.length === 0) {
+            toast(`Skipping "${file.name}" - file is empty`, 'info')
+            continue
+          }
+          let rows
+          try {
+            rows = lines.map(line => JSON.parse(line))
+          } catch (parseErr: any) {
+            toast(`Malformed JSONL in "${file.name}" - each line must be a JSON object: ${parseErr?.message || parseErr}`, 'error')
+            return
+          }
+          // Derive a stable datasource id/name from this file's stem.
+          const stem = file.name.replace(/\.[^.]+$/, '')
+          const safeStem = stem.replace(/[^a-zA-Z0-9_-]+/g, '_').replace(/^_+|_+$/g, '') || 'corpus'
+          const datasourceId = `benchmark_${safeStem}`.slice(0, 96)
+          const datasourceName = `Benchmark: ${stem}`
 
-        toast(`Ingesting ${rows.length} documentsâ€¦`, 'info')
-        const result = await ingestBenchmarkCorpus(rows, datasourceId, datasourceName, {
-          description: description || undefined,
-          owner_team_slug: ingestOwnerTeamSlug || undefined,
-        })
+          toast(`Ingesting ${rows.length} documents from "${file.name}"...`, 'info')
+          const result = await ingestBenchmarkCorpus(rows, datasourceId, datasourceName, {
+            description: description || undefined,
+            owner_team_slug: ingestOwnerTeamSlug || undefined,
+          })
+          totalDocs += result.count
+          ingestedSources.push(datasourceName)
+        }
         await fetchDataSources()
-        await fetchJobsForDataSource(result.datasource_id)
-        toast(`Ingested ${result.count} documents into "${datasourceName}"`, 'success')
-        handleDatasetClear()
-        setDescription('')
+        if (ingestedSources.length > 0) {
+          toast(`Ingested ${totalDocs} documents across ${ingestedSources.length} datasource${ingestedSources.length === 1 ? '' : 's'}`, 'success')
+          handleDatasetClear()
+          setDescription('')
+        }
       } catch (error: any) {
         console.error('Benchmark dataset ingest failed:', error)
         toast(`Ingestion failed: ${error?.message || 'unknown error'}`, 'error')
@@ -1216,17 +1225,22 @@ export default function IngestView() {
                           while the selected file name shows in place. */}
                       <FileText className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
                       <div className="flex h-10 w-full items-center rounded-md border border-input bg-background pl-10 pr-3 text-sm">
-                        <span className={`truncate ${datasetFile ? 'text-foreground' : 'text-muted-foreground'}`}>
-                          {datasetFile ? datasetFile.name : 'Choose a .jsonl file…'}
+                        <span className={`truncate ${datasetFiles.length > 0 ? 'text-foreground' : 'text-muted-foreground'}`}>
+                          {datasetFiles.length === 0
+                            ? 'Choose .jsonl file(s)…'
+                            : datasetFiles.length === 1
+                              ? datasetFiles[0].name
+                              : `${datasetFiles.length} files selected`}
                         </span>
                       </div>
                       <input
                         ref={datasetInputRef}
                         type="file"
                         accept=".jsonl,.json,.csv,.txt,application/jsonl,application/json,text/csv,text/plain"
+                        multiple
                         onChange={handleDatasetFileChange}
                         className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
-                        aria-label="Benchmark dataset file"
+                        aria-label="Benchmark dataset files"
                       />
                     </>
                   ) : (
@@ -1249,7 +1263,7 @@ export default function IngestView() {
                     (ingestType === 'file'
                       ? selectedFiles.length === 0
                       : ingestType === 'dataset'
-                        ? !datasetFile
+                        ? datasetFiles.length === 0
                         : !url) ||
                     !hasPermission(Permission.INGEST) ||
                     ingestOwnerTeamMissing
@@ -1272,8 +1286,8 @@ export default function IngestView() {
                   <Button
                     variant="outline"
                     onClick={handleDatasetClear}
-                    disabled={!datasetFile}
-                    title="Clear selected file"
+                    disabled={datasetFiles.length === 0}
+                    title="Clear selected files"
                   >
                     Clear
                   </Button>

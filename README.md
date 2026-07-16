@@ -28,14 +28,6 @@ Browser chat traffic goes through the BFF routes under
 `/api/v1/chat/stream/*`; the browser does not call the Dynamic Agents service
 directly.
 
-## Development Commands
-
-```bash
-npm run lint
-npm test
-npm run build
-```
-
 For Docker Compose:
 
 ```bash

@@ -25,45 +25,22 @@ const EMBEDDING_OPTIONS = [
   "bge-m3",
 ];
 
-const FRAMEWORK_OPTIONS = ["deepeval", "ragas"] as const;
-type Framework = (typeof FRAMEWORK_OPTIONS)[number];
-
-// Metric rows differ per evaluation framework — DeepEval and Ragas name their
-// quality metrics differently. The retrieval + operational rows are shared.
-// Switching the framework dropdown swaps which metric names appear (placeholder;
-// real values would come from running that framework).
-const METRIC_ROWS_BY_FRAMEWORK: Record<Framework, string[]> = {
-  deepeval: [
-    "Contextual Precision",
-    "Contextual Recall",
-    "Contextual Relevancy",
-    "Answer Relevancy",
-    "Faithfulness",
-    "MRR",
-    "nDCG@k",
-    "P50 latency",
-    "P95 latency",
-    "Avg tokens",
-  ],
-  ragas: [
-    "Context Precision",
-    "Context Recall",
-    "Context Entity Recall",
-    "Answer Relevancy",
-    "Faithfulness",
-    "MRR",
-    "nDCG@k",
-    "P50 latency",
-    "P95 latency",
-    "Avg tokens",
-  ],
-};
+const METRIC_ROWS = [
+  "Contextual Precision",
+  "Contextual Recall",
+  "Contextual Relevancy",
+  "Answer Relevancy",
+  "Faithfulness",
+  "MRR",
+  "nDCG@k",
+  "P50 latency",
+  "P95 latency",
+  "Avg tokens",
+];
 
 export default function EvaluationView() {
   const [embeddingA, setEmbeddingA] = useState("nomic-embed-text");
   const [embeddingB, setEmbeddingB] = useState("mxbai-embed-large");
-  const [framework, setFramework] = useState<Framework>("deepeval");
-  const metricRows = METRIC_ROWS_BY_FRAMEWORK[framework];
 
   return (
     <div className="h-full flex flex-col bg-background overflow-hidden">
@@ -82,7 +59,7 @@ export default function EvaluationView() {
           <div>
             <h1 className="text-lg font-bold gradient-text">Evaluation</h1>
             <p className="text-muted-foreground text-xs">
-              Compare embedding models (placeholder)
+              Compare embedding models ((Wiring in process))
             </p>
           </div>
         </div>
@@ -92,19 +69,6 @@ export default function EvaluationView() {
         {/* Config panel */}
         <aside className="w-72 shrink-0 border-r border-border bg-card/40 p-5 space-y-4 overflow-y-auto">
           <h2 className="text-sm font-semibold text-foreground">Configuration</h2>
-
-          <div>
-            <label className="block text-xs font-medium text-muted-foreground mb-1">Evaluation framework</label>
-            <select
-              value={framework}
-              onChange={(e) => setFramework(e.target.value as Framework)}
-              className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-            >
-              {FRAMEWORK_OPTIONS.map((f) => (
-                <option key={f} value={f}>{f}</option>
-              ))}
-            </select>
-          </div>
 
           <div>
             <label className="block text-xs font-medium text-muted-foreground mb-1">Embedding A</label>
@@ -166,7 +130,7 @@ export default function EvaluationView() {
         <ScrollArea className="flex-1">
           <div className="p-6">
             <h3 className="text-base font-semibold text-foreground mb-3">
-              Metric comparison <span className="text-muted-foreground font-normal">· {framework}</span>
+              Metric comparison
             </h3>
             <div className="rounded-xl border border-border overflow-hidden">
               <table className="w-full table-fixed text-sm">
@@ -179,7 +143,7 @@ export default function EvaluationView() {
                   </tr>
                 </thead>
                 <tbody>
-                  {metricRows.map((metric) => (
+                  {METRIC_ROWS.map((metric) => (
                     <tr key={metric} className="border-t border-border/50">
                       <td className="py-2.5 px-4 text-foreground">{metric}</td>
                       <td className="py-2.5 px-4 tabular-nums text-muted-foreground">{PLACEHOLDER}</td>

@@ -1,6 +1,6 @@
-# CAIPE UI (customized)
+# CAIPE UI (customised)
 
-A customized build of the CAIPE web UI, used for RAG evaluation. On top of the
+A customised build of the CAIPE web UI, used for RAG evaluation. On top of the
 stock UI it adds:
 
 - **Benchmark Corpus ingestion** — a new Data Sources type that uploads a

@@ -9,7 +9,7 @@ platform health.
 
 From the repository root:  
 cd <your root directory>/ai-platform-engineering  
-docker build -f build/Dockerfile.caipe-ui --target runner -t caipe-ui-custom:latest .  
+docker build -f build/Dockerfile.caipe-ui --target runner -t ghcr.io/cnoe-io/caipe-ui:0.5.16 .  
 docker compose up -d --force-recreate caipe-ui  
 
 Open http://localhost:3000.

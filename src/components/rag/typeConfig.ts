@@ -63,7 +63,7 @@ export const ingestTypeConfigs: Record<string, IngestTypeConfig> = {
         icon: '/confluence.svg'
     },
     'dataset': {
-        label: 'Benchmark Dataset',
+        label: 'Benchmark Corpus',
         requiredIngestorType: 'local-file',
         icon: '📊'
     },
@@ -83,7 +83,7 @@ export const isIngestTypeAvailable = (
     const config = ingestTypeConfigs[ingestType];
     if (!config) return false;
     if (ingestType === 'file') return true;
-    // Benchmark Dataset parses a JSONL corpus client-side; no dedicated ingestor needed.
+    // Benchmark Corpus parses a JSONL corpus client-side; no dedicated ingestor needed.
     if (ingestType === 'dataset') return true;
 
     return availableIngestors.some(

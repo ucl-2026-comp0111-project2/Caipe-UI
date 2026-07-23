@@ -9,7 +9,7 @@ import { NextRequest, NextResponse } from 'next/server';
 /**
  * Benchmark corpus ingest (server-side).
  *
- * The Benchmark Dataset tab uploads a `.jsonl` corpus where each line is one
+ * The Benchmark Corpus tab uploads a `.jsonl` corpus where each line is one
  * document that must keep its own `document_id` (so retrieval eval lines up with
  * the golden `expected_doc_ids`). Preserving per-line ids requires the rag-server's
  * low-level lifecycle (`heartbeat -> datasource -> job -> /v1/ingest -> complete`),

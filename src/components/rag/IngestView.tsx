@@ -219,11 +219,11 @@ export default function IngestView() {
   // Ingestion state
   const [url, setUrl] = useState('')
   const [selectedFiles, setSelectedFiles] = useState<File[]>([])
-  // Benchmark Dataset (JSONL) ingest â€” client-side files + preview. Each selected
+  // Benchmark Corpus (JSONL) ingest â€” client-side files + preview. Each selected
   // .jsonl file is ingested into its own datasource.
-  const [datasetFiles, setDatasetFiles] = useState<File[]>([])
-  const [datasetPreview, setDatasetPreview] = useState<string[]>([])
-  const datasetInputRef = useRef<HTMLInputElement | null>(null)
+  const [corpusFiles, setCorpusFiles] = useState<File[]>([])
+  const [corpusPreview, setCorpusPreview] = useState<string[]>([])
+  const corpusInputRef = useRef<HTMLInputElement | null>(null)
   const [ingestType, setIngestType] = useState<string>('web')
   const [description, setDescription] = useState('')
   const [includeSubPages, setIncludeSubPages] = useState(false)
@@ -884,44 +884,44 @@ export default function IngestView() {
   const ingestOwnerTeamRequired = !ingestIsOrgAdmin
   const ingestOwnerTeamMissing = ingestOwnerTeamRequired && !ingestOwnerTeamSlug
 
-  // Read a selected .jsonl benchmark dataset file and show a small preview of the
+  // Read a selected .jsonl benchmark corpus file and show a small preview of the
   // first few rows. Client-side only for now â€” real ingest wiring is a follow-up.
-  const handleDatasetFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleCorpusFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files ?? [])
-    setDatasetFiles(files)
-    setDatasetPreview([])
+    setCorpusFiles(files)
+    setCorpusPreview([])
     if (files.length === 0) return
     try {
       // Preview the first file's first few lines.
       const text = await files[0].text()
       const lines = text.split('\n').filter(line => line.trim()).slice(0, 5)
-      setDatasetPreview(lines)
+      setCorpusPreview(lines)
     } catch (err) {
-      console.error('Failed to read dataset file', err)
+      console.error('Failed to read corpus file', err)
     }
   }
 
-  // Clear the selected benchmark dataset files + preview. Also reset the hidden
+  // Clear the selected benchmark corpus files + preview. Also reset the hidden
   // native input's value so re-selecting the same file fires onChange again.
-  const handleDatasetClear = () => {
-    setDatasetFiles([])
-    setDatasetPreview([])
-    if (datasetInputRef.current) datasetInputRef.current.value = ''
+  const handleCorpusClear = () => {
+    setCorpusFiles([])
+    setCorpusPreview([])
+    if (corpusInputRef.current) corpusInputRef.current.value = ''
   }
 
   const handleIngest = async () => {
-    // Benchmark Dataset: parse the uploaded .jsonl (one JSON document per line)
+    // Benchmark Corpus: parse the uploaded .jsonl (one JSON document per line)
     // and ingest each line as its own document, preserving document_id so
     // retrieval eval lines up with the golden set's expected_doc_ids.
     if (ingestType === 'dataset') {
-      if (datasetFiles.length === 0) {
+      if (corpusFiles.length === 0) {
         toast('Choose one or more .jsonl corpus files first', 'error')
         return
       }
       try {
         let totalDocs = 0
         const ingestedSources: string[] = []
-        for (const file of datasetFiles) {
+        for (const file of corpusFiles) {
           const text = await file.text()
           const lines = text.split('\n').map(l => l.trim()).filter(Boolean)
           if (lines.length === 0) {
@@ -939,7 +939,7 @@ export default function IngestView() {
           const stem = file.name.replace(/\.[^.]+$/, '')
           const safeStem = stem.replace(/[^a-zA-Z0-9_-]+/g, '_').replace(/^_+|_+$/g, '') || 'corpus'
           const datasourceId = `benchmark_${safeStem}`.slice(0, 96)
-          const datasourceName = `Benchmark: ${stem}`
+          const datasourceName = `Benchmark Corpus: ${stem}`
 
           toast(`Ingesting ${rows.length} documents from "${file.name}"...`, 'info')
           const result = await ingestBenchmarkCorpus(rows, datasourceId, datasourceName, {
@@ -952,11 +952,11 @@ export default function IngestView() {
         await fetchDataSources()
         if (ingestedSources.length > 0) {
           toast(`Ingested ${totalDocs} documents across ${ingestedSources.length} datasource${ingestedSources.length === 1 ? '' : 's'}`, 'success')
-          handleDatasetClear()
+          handleCorpusClear()
           setDescription('')
         }
       } catch (error: any) {
-        console.error('Benchmark dataset ingest failed:', error)
+        console.error('Benchmark corpus ingest failed:', error)
         toast(`Ingestion failed: ${error?.message || 'unknown error'}`, 'error')
       }
       return
@@ -1225,22 +1225,22 @@ export default function IngestView() {
                           while the selected file name shows in place. */}
                       <FileText className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
                       <div className="flex h-10 w-full items-center rounded-md border border-input bg-background pl-10 pr-3 text-sm">
-                        <span className={`truncate ${datasetFiles.length > 0 ? 'text-foreground' : 'text-muted-foreground'}`}>
-                          {datasetFiles.length === 0
+                        <span className={`truncate ${corpusFiles.length > 0 ? 'text-foreground' : 'text-muted-foreground'}`}>
+                          {corpusFiles.length === 0
                             ? 'Choose .jsonl file(s)…'
-                            : datasetFiles.length === 1
-                              ? datasetFiles[0].name
-                              : `${datasetFiles.length} files selected`}
+                            : corpusFiles.length === 1
+                              ? corpusFiles[0].name
+                              : `${corpusFiles.length} files selected`}
                         </span>
                       </div>
                       <input
-                        ref={datasetInputRef}
+                        ref={corpusInputRef}
                         type="file"
                         accept=".jsonl,.json,.csv,.txt,application/jsonl,application/json,text/csv,text/plain"
                         multiple
-                        onChange={handleDatasetFileChange}
+                        onChange={handleCorpusFileChange}
                         className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
-                        aria-label="Benchmark dataset files"
+                        aria-label="Benchmark corpus files"
                       />
                     </>
                   ) : (
@@ -1263,7 +1263,7 @@ export default function IngestView() {
                     (ingestType === 'file'
                       ? selectedFiles.length === 0
                       : ingestType === 'dataset'
-                        ? datasetFiles.length === 0
+                        ? corpusFiles.length === 0
                         : !url) ||
                     !hasPermission(Permission.INGEST) ||
                     ingestOwnerTeamMissing
@@ -1277,7 +1277,7 @@ export default function IngestView() {
                           ? selectedFiles.length > 1
                             ? `Ingest ${selectedFiles.length} files`
                             : 'Ingest this file'
-                          : 'Ingest this URL'
+                      : 'Ingest this URL'
                   }
                 >
                   Ingest
@@ -1285,8 +1285,8 @@ export default function IngestView() {
                 {ingestType === 'dataset' && (
                   <Button
                     variant="outline"
-                    onClick={handleDatasetClear}
-                    disabled={datasetFiles.length === 0}
+                    onClick={handleCorpusClear}
+                    disabled={corpusFiles.length === 0}
                     title="Clear selected files"
                   >
                     Clear
@@ -1294,17 +1294,17 @@ export default function IngestView() {
                 )}
               </div>
 
-              {/* Benchmark Dataset: format hint + JSONL preview (UI scaffolding) */}
+              {/* Benchmark Corpus: format hint + JSONL preview (UI scaffolding) */}
               {ingestType === 'dataset' && (
                 <p className="mt-2 ml-1 text-xs text-muted-foreground">
                   Accepts a normalized <code>.jsonl</code> corpus (one document per line).
                   {' '}For <code>.parquet</code> datasets (e.g. EnterpriseRAG-Bench), convert to JSONL first.
                 </p>
               )}
-              {ingestType === 'dataset' && datasetPreview.length > 0 && (
+              {ingestType === 'dataset' && corpusPreview.length > 0 && (
                 <div className="mt-3">
                   <p className="text-xs text-muted-foreground mb-1">
-                    Preview (first {datasetPreview.length} row{datasetPreview.length === 1 ? '' : 's'}):
+                    Preview (first {corpusPreview.length} row{corpusPreview.length === 1 ? '' : 's'}):
                   </p>
                   <div className="rounded-lg border border-border/50 bg-muted/30 max-h-48 overflow-auto">
                     <SyntaxHighlighter
@@ -1312,7 +1312,7 @@ export default function IngestView() {
                       style={vscDarkPlus}
                       customStyle={{ margin: 0, background: 'transparent', fontSize: '0.7rem' }}
                     >
-                      {datasetPreview
+                      {corpusPreview
                         .map((line) => {
                           try { return JSON.stringify(JSON.parse(line), null, 2) }
                           catch { return line }

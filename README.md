@@ -1,66 +1,36 @@
-# CAIPE UI
+# CAIPE UI (customized)
 
-Next.js BFF and web UI for CAIPE. The UI talks to Dynamic Agents through
-server-side API routes, manages MongoDB-backed chat state, and exposes admin
-surfaces for models, MCP servers, skills, credentials, RBAC, audit logs, and
-platform health.
+A customized build of the CAIPE web UI, used for RAG evaluation. On top of the
+stock UI it adds:
 
-## Quick Start
+- **Benchmark Corpus ingestion** — a new Data Sources type that uploads a
+  `.jsonl` corpus and keeps each document's **original `document_id`**, so it
+  lines up with an evaluation question set.
+- **Evaluation section** — a three-tab workflow: **Question Sets**,
+  **Run Experiment**, and **Leaderboard**.
 
-From the repository root:  
-cd <your root directory>/ai-platform-engineering  
-docker build -f build/Dockerfile.caipe-ui --target runner -t ghcr.io/cnoe-io/caipe-ui:0.5.16 .  
-docker compose up -d --force-recreate caipe-ui  
+Everything else is the upstream CAIPE UI.
 
-Open http://localhost:3000.
+## Setup
 
-## Runtime Configuration
-
-| Variable | Default | Purpose |
-|---|---|---|
-| `DYNAMIC_AGENTS_URL` | `http://localhost:8100` in local dev, `http://dynamic-agents:8100` in production | Server-side Dynamic Agents runtime URL |
-| `MONGODB_URI` | unset | Enables MongoDB-backed conversations and admin state |
-| `PROMETHEUS_URL` | unset | Server-side Prometheus URL for Admin metrics and health |
-| `RAG_SERVER_URL` | unset | Server-side RAG API URL |
-| `NEXTAUTH_SECRET` | unset | Required for authenticated deployments |
-| `SSO_ENABLED` | `false` | Enables OIDC-backed auth |
-
-Browser chat traffic goes through the BFF routes under
-`/api/v1/chat/stream/*`; the browser does not call the Dynamic Agents service
-directly.
-
-For Docker Compose:
+Drop this `ui/` folder into the CAIPE repo (replacing its `ui/`), then from the
+repo root:
 
 ```bash
-COMPOSE_PROFILES=caipe-ui,dynamic-agents,caipe-mongodb docker compose -f ../docker-compose.dev.yaml up --build
+cd <your-root>/ai-platform-engineering
+docker build -f build/Dockerfile.caipe-ui --target runner -t ghcr.io/cnoe-io/caipe-ui:0.5.16 .
+docker compose up -d --force-recreate caipe-ui
 ```
 
-## App Structure
+Then open **http://localhost:3000**.
 
-```text
-ui/src/app/                 Next.js App Router pages and API routes
-ui/src/components/          React components
-ui/src/components/chat/     Chat UI and Dynamic Agents timeline
-ui/src/components/dynamic-agents/
-                            Agent, model, MCP server, and workflow management
-ui/src/components/admin/    Admin and RBAC surfaces
-ui/src/lib/                 BFF utilities, clients, auth, RBAC helpers
-ui/src/store/               Zustand stores
-ui/src/types/               Shared TypeScript types
-```
+> **Why that tag?** Building under `ghcr.io/cnoe-io/caipe-ui:0.5.16` — the name the
+> base `docker-compose.yaml` already expects — means the standard `docker compose up`
+> picks up this custom image automatically. **No override file or extra flags needed.**
 
-## Current Chat Flow
+## Notes
 
-1. The user selects or opens a conversation in the UI.
-2. The BFF validates auth/RBAC and forwards stream requests to Dynamic Agents.
-3. Dynamic Agents streams AG-UI/SSE events back through the BFF.
-4. The UI stores conversation messages and stream events in MongoDB-backed state.
-5. MCP tools are reached through configured MCP server rows, usually via AgentGateway.
-
-## Related Docs
-
-- [UI overview](../docs/docs/ui/index.md)
-- [UI configuration](../docs/docs/ui/configuration.md)
-- [Dynamic Agents API](../docs/docs/api/dynamic-agents-mcp.md)
-- [Helm chart reference](../docs/docs/installation/helm-charts/ai-platform-engineering/caipe-ui.md)
-# Caipe-UI
+- This is only the UI — it needs the full CAIPE stack (rag-server, Keycloak, etc.)
+  from the main repo running alongside it.
+- To go back to the stock UI: `docker pull ghcr.io/cnoe-io/caipe-ui:0.5.16`, then
+  rebuild to get this one back. Don't run `docker compose pull` while using this image.

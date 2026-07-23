@@ -7,10 +7,10 @@ platform health.
 
 ## Quick Start
 
-From the repository root:
-cd <your root directory>/ai-platform-engineering
-docker build -f build/Dockerfile.caipe-ui --target runner -t caipe-ui-custom:latest .
-docker compose up -d --force-recreate caipe-ui
+From the repository root:  
+cd <your root directory>/ai-platform-engineering  
+docker build -f build/Dockerfile.caipe-ui --target runner -t caipe-ui-custom:latest .  
+docker compose up -d --force-recreate caipe-ui  
 
 Open http://localhost:3000.
 
